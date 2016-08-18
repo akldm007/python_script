@@ -6,6 +6,7 @@ import pdb
 import subprocess
 import redis
 import re
+import time
 
 workdir=sys.argv[1]
 
@@ -25,10 +26,13 @@ def gen_tcf_list(testset_file):
     return_tcf_list=[]
     for a_tcf in testset_content_list:
 	#print a_tcf
-	if re.match("#.*",a_tcf) or re.match("\s*\n",a_tcf):
+	if re.match("#.*",a_tcf) or re.match("\s*\n",a_tcf) or a_tcf.find("{")==-1:
 	    continue
 	else:
+	    #use short path
             tcf_name=a_tcf.split("/")[-1].split("{")[0]
+	    #use long path
+            tcf_name=a_tcf.split("{")[0]
 	    tcf_no=re.split("{|}",a_tcf)[1].split(",")
 	    cur_tcf_no_list=[]
 	    for a_number in tcf_no:
@@ -43,27 +47,16 @@ def gen_tcf_list(testset_file):
 	return_tcf_list.append(cur_tcf_list)
     return return_tcf_list
 		
-def log_tcf_status(hkey,tcf_list,exec_out):
-    exp='(.*\.tcf{\S+}):\s(\S+)'
-    exp_py="\|.*\|\s(\S+)\s+\| configDefault \|\n\|.*\|.*\|.*\|\n\|.*\|.*\|.*\|\n(?:.*\n)?\|.*\|.*\|\s+(\S+) \|"
-    for a_tcf_status in re.findall(exp,exec_out):
-	tcf_name=a_tcf_status[0].split("/")[-1]
-	tcf_status=a_tcf_status[1]
-	r.hmset(hkey,{tcf_name:tcf_status})
-
-    for a_tcf_status in re.findall(exp_py,exec_out):
-	tcf_name=a_tcf_status[0]
-	tcf_status=a_tcf_status[1]
-	r.hmset(hkey,{tcf_name:tcf_status})
-
 sub_workdir_list=subprocess.check_output("ls "+workdir,shell=True).split("\n")
 #print sub_workdir_list
 log_key=workdir
 
+#print time.localtime()
 for a_sub_workdir in sub_workdir_list:
     if a_sub_workdir:
 	cur_dir=workdir+"/"+a_sub_workdir+"/"
 	ts_name=a_sub_workdir.split("__")[0]
+	#print ts_name
         testset_file=cur_dir+a_sub_workdir.split("__")[0]
 	hkey=workdir+"/"+a_sub_workdir.split("__")[0]
 	r=redis_con()
@@ -75,16 +68,30 @@ for a_sub_workdir in sub_workdir_list:
 	if os.path.exists(journal_file):
 	    r.hmset(hkey,{"ts_status":"running"})
 	else:
-	    exec_out_file=cur_dir+"result."+a_sub_workdir.split("__")[0]+"/"+"exec.out*"
-	    if sys_cmd("head "+exec_out_file):
+	    journal_file=cur_dir+"result."+a_sub_workdir.split("__")[0]+"/"+"journal.exec*"
+	    #print journal_file
+	    #pdb.set_trace()
+	    if sys_cmd("head "+journal_file):
 		r.hmset(hkey,{"ts_status":"fail"})
 	    else:
-	        exec_out=subprocess.check_output("cat "+exec_out_file,shell=True)	
 		r.hmset(hkey,{"ts_status":"suc"})
-		#if ts_name=="corona_sqlscript":
-         	#    pdb.set_trace()
-        	log_tcf_status(hkey,tcf_list,exec_out)
+		for a_status in ["PASS","FAIL","UNTESTED","UNRESOLVED"]:
+		    grep_cmd="grep %s %s | grep tcf"%(a_status,journal_file)
+		    if subprocess.call(grep_cmd,shell=True,stdout=open('/dev/null','w'),stderr=subprocess.STDOUT):
+		        pass
+		    else:
+	                match_content=subprocess.check_output(grep_cmd,shell=True)	
+		        for a_match in match_content.split("\n"):
+			    if a_match:
+   		                cur_match=a_match.split("|")[-1]
+			        #print "cur_match: %s"%(cur_match)
+			        cur_tcf_name=cur_match.split(":")[0]
+			        cur_tcf_status=cur_match.split(":")[1].split()[0].strip()
+			        r.hmset(hkey,{cur_tcf_name:cur_tcf_status})
+			    else:
+			        pass
 
+#print time.localtime()
 r=redis_con()
 testset_list=r.zrevrange(log_key,0,-1)
 for a_testset in testset_list:
@@ -112,6 +119,7 @@ for a_testset in testset_list:
 		notrun_tcf_list.append(a_tcf)
     cur_report="Testset:%-40s    PASS:%-5d FAIL:%-5d UNRESOLVED:%-5d UNTESTED:%-5d NOT_RUN:%-5d"%(testset_name,len(pass_tcf_list),len(fail_tcf_list),len(unres_tcf_list),len(untest_tcf_list),len(notrun_tcf_list))
     print cur_report
+#print time.localtime()
     
 ###get testset list###
 
