@@ -169,5 +169,3 @@ if __name__ == '__main__':
             gen_report(log_key)
     elif args.gen_rerun_ts:
         print gen_rerun(log_key,testset)
-        
-    
