@@ -11,14 +11,20 @@ os.environ['SYBASE_OCS']='OCS-16_0'
 sys.path.append('/remote/aseqa_archive2/asecepheus/linuxamd64_smp/release/OCS-16_0/python/python26_64r/lib')
 import sybpydb
 import logging
+import datetime
+
+now=datetime.datetime.now()
+time_tag=now.strftime("%Y-%m-%d-%H-%M-%S")
+
+start_time=sys.argv[1]
+end_time=sys.argv[2]
+branch_name=sys.argv[3]
+
 
 formatter = "%(asctime)s:%(name)s:%(levelname)s:%(message)s"
 logging.basicConfig(level=logging.DEBUG, format=formatter)
 logger = logging.getLogger(__name__)
 
-start_time=sys.argv[1]
-end_time=sys.argv[2]
-branch_name=sys.argv[3]
 INSERT='I'
 CHANGE='C'
 
@@ -77,14 +83,14 @@ def parse_diff(ct_diff_output):
     return rslt
 
 view_tag=branch_name+"\_%"
-get_relevant_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed < \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,view_tag)
+get_relevant_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,view_tag)
 relevant_cset=exec_cmd(get_relevant_cset_sql)
 if relevant_cset:
     relevant_cset_list=map(lambda x:x[0], relevant_cset)
     # print "relevant_cset %s"%(",".join(relevant_cset_list))
 
 pull_view_tag=branch_name+"\_merge%"
-get_pull_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed < \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,pull_view_tag)
+get_pull_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,pull_view_tag)
 # print get_pull_cset_sql
 pull_cset=exec_cmd(get_pull_cset_sql)
 if pull_cset:
@@ -158,11 +164,12 @@ def get_change_content(cset_list):
             # delay 1 min let the check in work
             latest_close_time=(close_time_list[0][0]+datetime.timedelta(minutes=1)).strftime('%d-%b-%Y.%H:%M')
     file_list=",".join(server_code_list)
-    wfile=open("/remote/aseqa_archive3/code_coverage/scrum_tmp/file_list", 'w')
+    file_list_name="/remote/aseqa_archive3/code_coverage/scrum_tmp/"+branch_name+"_file_list_"+time_tag
+    wfile=open(file_list_name, 'w')
     wfile.write(file_list)
     wfile.close()
     #get_info_cmd="ssh demingli@lnxsdcc1.oak.sap.corp /usr/u/demingli/code_coverage/get_file_list_change2.sh "+view_name+" "+cspec+" "+earliest_create_time+" "+latest_close_time+" "+file_list+" 2>/dev/null"
-    get_info_cmd="ssh demingli@hpcblade5.oak.sap.corp /usr/u/demingli/code_coverage/get_file_list_change2.sh "+view_name+" "+cspec+" "+earliest_create_time+" "+latest_close_time+" "+"/remote/aseqa_archive3/code_coverage/scrum_tmp/file_list"+" 2>/dev/null"
+    get_info_cmd="ssh demingli@lnxsdcc2.sjc.sap.corp /usr/u/demingli/code_coverage/get_file_list_change2.sh "+view_name+" "+cspec+" "+earliest_create_time+" "+latest_close_time+" "+branch_name+" "+file_list_name+" 2>/dev/null"
     # print get_info_cmd
     all_file_info=os.popen(get_info_cmd).read()
     # pdb.set_trace()
@@ -187,19 +194,47 @@ def get_change_content(cset_list):
     return server_affected_list
 
 def merge_diff(diff_all,diff_pull):
-    str_diff_all="\n".join(diff_all)
     for a_diff_pull in diff_pull:
+        str_diff_all="\n".join(diff_all)
         a_diff_pull_content=" ".join(a_diff_pull.split(" ")[1:])
         if a_diff_pull_content:
-            exp="\d+\s"+re.escape(a_diff_pull_content)
+            exp="^\d+\s"+re.escape(a_diff_pull_content)+"$"
             # print exp
-            if re.findall(exp,str_diff_all):
-                if len(re.findall(exp,str_diff_all))>1:
-                    pass
-                else:
-                    match_line=re.findall(exp,str_diff_all)[0]
+            if re.findall(exp,str_diff_all,re.M):
+                #if find many matchs, do nothing
+                #if len(re.findall(exp,str_diff_all))>1:
+                #    pass
+                #else:
+                #    match_line=re.findall(exp,str_diff_all)[0]
+                #    try:
+                #        diff_all.remove(match_line)
+                #    except:
+                #        pass
+                #        # print "remove pull content %s failed"%(a_diff_pull_content)
+                match_line=re.findall(exp,str_diff_all,re.M)[0]
+                try:
                     diff_all.remove(match_line)
-                    # print "remove pull content %s"%(a_diff_pull_content)
+                except:
+                    pass
+        #remove all null raw
+    for a_diff_all in diff_all:
+        a_diff_all_content=" ".join(a_diff_all.split(" ")[1:])
+        if a_diff_all_content:
+            if a_diff_all_content=="/*" or a_diff_all_content=="*/" or a_diff_all_content=="**" or a_diff_all_content=="{" or a_diff_all_content=="}":
+                match_line=a_diff_all.split(" ")[0]+" "+a_diff_all_content
+                try:
+                    diff_all.remove(match_line)
+                except:
+                    pass
+            else:
+                pass
+        else:
+            match_line=a_diff_all.split(" ")[0]+" "
+            try:
+                diff_all.remove(match_line)
+            except:
+                pass
+                # print "remove null content %s failed"%(match_line)
     return diff_all
         
 if pull_cset:
@@ -212,7 +247,13 @@ if pull_cset:
                  if a_pull_change["file_name"]==file_name:
                       # print "file name: %s"%(file_name)
                       relevant_change_content[i]["change_info"]=merge_diff(a_change["change_info"],a_pull_change["change_info"])
-    print relevant_change_content
-     
+    new_code=relevant_change_content
+    # print relevant_change_content
 else:
-    print get_change_content(relevant_cset_list)
+    new_code=get_change_content(relevant_cset_list)
+    # print get_change_content(relevant_cset_list)
+new_code_file="/remote/aseqa_archive3/code_coverage/scrum_tmp/"+branch_name+"_new_code_"+time_tag
+wfile=open(new_code_file, 'w')
+wfile.write(str(new_code))
+wfile.close()
+print new_code
