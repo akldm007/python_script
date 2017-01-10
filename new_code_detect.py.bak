@@ -100,7 +100,6 @@ if pull_cset:
     # print "pull_cset %s"%(",".join(pull_cset_list))
 else:
     pull_cset_list=[]
-    # pass
     # print "no pull_cset"
 
 def get_affected_file_list(cset_list):
@@ -250,23 +249,8 @@ if pull_cset:
                  if a_pull_change["file_name"]==file_name:
                       # print "file name: %s"%(file_name)
                       relevant_change_content[i]["change_info"]=merge_diff(a_change["change_info"],a_pull_change["change_info"])
-    # print relevant_change_content
-    file_list_name="/remote/aseqa_archive3/code_coverage/scrum_tmp/"+branch_name+"_file_list_"+time_tag
-    get_pure_pull_list_cmd="ssh demingli@lnxsdcc2.sjc.sap.corp /usr/u/demingli/code_coverage/get_pure_pull_list.sh "+view_name+" "+cspec+" "+start_time+" "+end_time+" "+branch_name+" "+file_list_name+" 2>/dev/null"
-    pure_pull_file_info=os.popen(get_pure_pull_list_cmd).read()
-    if pure_pull_file_info:
-        pure_pull_list=eval(pure_pull_file_info)
-    else:
-        pure_pull_list=[]
-    if pure_pull_list:
-        for i,a_change in enumerate(relevant_change_content):
-            file_name=a_change["file_name"]
-            if file_name in pure_pull_list:
-                relevant_change_content[i]["change_info"]=[]
-            else:
-                pass
-
     new_code=relevant_change_content
+    # print relevant_change_content
 else:
     new_code=get_change_content(relevant_cset_list)
     # print get_change_content(relevant_cset_list)

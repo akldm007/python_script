@@ -84,6 +84,8 @@ relevant_cset=exec_cmd(get_relevant_cset_sql)
 if relevant_cset:
     relevant_cset_list=map(lambda x:x[0], relevant_cset)
     # print "relevant_cset %s"%(" ".join(relevant_cset_list))
+else:
+    relevant_cset_list=[]
 
 pull_view_tag=branch_name+"\_merge%"
 get_pull_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,pull_view_tag)
@@ -96,7 +98,8 @@ if pull_cset:
         if a_pull_cset in relevant_cset_list:
             relevant_cset_list.remove(a_pull_cset)
 else:
-    pass
+    pull_cset_list=[]
+    # pass
     # print "no pull_cset"
 
 def get_affected_file_list(cset_list):

@@ -5,8 +5,10 @@ import re
 import pdb
 os.environ['SYBASE']='/remote/aseqa_archive2/asecepheus/linuxamd64_smp/release'
 os.environ['SYBASE_OCS']='OCS-16_0'
+os.environ["LD_LIBRARY_PATH"]=os.environ["LD_LIBRARY_PATH"]+":/remote/aseqa_archive2/asecepheus/linuxamd64_smp/release/OCS-16_0/lib"
 sys.path.append('/remote/aseqa_archive2/asecepheus/linuxamd64_smp/release/OCS-16_0/python/python26_64r/lib')
 import sybpydb
+import math
 
 tc_name=sys.argv[1]
 def exec_cmd(sql):
@@ -42,7 +44,11 @@ for exec_time in exec_time_list:
         sum_time+=int(exec_time)
         count+=1
 if count:
-    average=float(sum_time/count/60)
-    print average
+    average=int(math.ceil(float(sum_time/count)))
 else:
     raise Exception("No result!")
+
+if exec_time_list>3:
+    print (sorted(exec_time_list)[0],average,sorted(exec_time_list)[-1])
+else:
+    print (average,average,average)
