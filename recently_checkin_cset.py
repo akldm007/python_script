@@ -28,6 +28,7 @@ for a_list in cc_list["branch"]:
         latest_report_time=a_list["archive_list"][0]["report_name"].split("_")[1]
 
 if len(latest_report_time)==8:
+    # print latest_report_time
     pass
 else:
     print "Time format is not right"

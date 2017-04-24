@@ -84,7 +84,7 @@ def parse_diff(ct_diff_output):
     return rslt
 
 view_tag=branch_name+"\_%"
-get_relevant_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,view_tag)
+get_relevant_cset_sql="select cset_name from qts_db..e2_cset where date_closed > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,view_tag)
 # print get_relevant_cset_sql
 relevant_cset=exec_cmd(get_relevant_cset_sql)
 if relevant_cset:
@@ -94,7 +94,7 @@ else:
     relevant_cset_list=[]
 
 pull_view_tag=branch_name+"\_merge%"
-get_pull_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,pull_view_tag)
+get_pull_cset_sql="select cset_name from qts_db..e2_cset where date_closed > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,pull_view_tag)
 # print get_pull_cset_sql
 pull_cset=exec_cmd(get_pull_cset_sql)
 if pull_cset:
@@ -138,23 +138,6 @@ cspec=branch_name+".csp"
 
 all_pull_affect_file_list=get_affected_file_list(pull_cset_list)
 pull_affect_file_list=filter(lambda x:x in all_affect_file_list, all_pull_affect_file_list)
-
-def get_csetinfo(file_name):
-    return_info_list=[]
-    if file_name.startswith('/calm/svr/'):
-        file_condition="%"+file_name+"%"
-        select_sql="select a.cset_name,c.email from qts_db..e2_cset as a inner join qts_db..e2_members as b on a.date_created > \"%s\" and a.date_closed <= \"%s\" and a.view_tag like \"%s\" escape '\\' and a.cset_id in (select b.cset_id from qts_db..e2_members where b.file_name like \"%s\") inner join qts_db..users as c on b.userid=c.userid and not (c.userid=13162)"%(start_time,end_time,view_tag,file_condition) 
-        try:
-            select_results=exec_cmd(select_sql)
-            if select_results:
-                for a_result in select_results:
-                    cur_csetinfo_dict={}
-                    cur_csetinfo_dict["cset_name"]=a_result[0]
-                    cur_csetinfo_dict["user_id"]=a_result[1]
-                    return_info_list.append(cur_csetinfo_dict)
-        except:
-            return []
-    return return_info_list
 
 def get_change_content(cset_list):
     if not cset_list:
@@ -209,11 +192,6 @@ def get_change_content(cset_list):
                     file_affected_info["file_name"]=a_server_code
                     file_affected_info["code_type"]="server"
                     file_affected_info["change_info"]=parse_diff(a_file_info["change_info"])
-                    # remove to the final loop
-                    #if file_affected_info["change_info"]:
-                    #    file_affected_info["cset_info"]=get_csetinfo(a_server_code)
-                    #else:
-                    #    file_affected_info["cset_info"]=[]
                     server_affected_list.append(file_affected_info)
     else:
         print """{"code": 1, "msg":"No server code change is detected"}"""
@@ -239,17 +217,13 @@ def merge_diff(diff_all,diff_pull):
                 #        pass
                 #        # print "remove pull content %s failed"%(a_diff_pull_content)
                 match_line=re.findall(exp,str_diff_all,re.M)[0]
-                try:
-                    diff_all.remove(match_line)
-                except:
+                if match_line.endswith("/*") or match_line.endswith("*/") or match_line.endswith("{") or match_line.endswith("}"):
                     pass
-                #if match_line.endswith("/*") or match_line.endswith("*/") or match_line.endswith("{") or match_line.endswith("}"):
-                #    pass
-                #else:
-                #    try:
-                #        diff_all.remove(match_line)
-                #    except:
-                #        pass
+                else:
+                    try:
+                        diff_all.remove(match_line)
+                    except:
+                        pass
         #remove all null raw
     for a_diff_all in diff_all:
         a_diff_all_content=" ".join(a_diff_all.split(" ")[1:])
@@ -282,49 +256,25 @@ if pull_cset:
                       # print "file name: %s"%(file_name)
                       relevant_change_content[i]["change_info"]=merge_diff(a_change["change_info"],a_pull_change["change_info"])
     # print relevant_change_content
+    file_list_name="/remote/aseqa_archive3/code_coverage/scrum_tmp/"+branch_name+"_file_list_"+time_tag
+    get_pure_pull_list_cmd="ssh demingli@lnxsdcc2.sjc.sap.corp /usr/u/demingli/code_coverage/get_pure_pull_list.sh "+view_name+" "+cspec+" "+start_time+" "+f_end_time+" "+branch_name+" "+file_list_name+" 2>/dev/null"
+    pure_pull_file_info=os.popen(get_pure_pull_list_cmd).read()
+    if pure_pull_file_info:
+        pure_pull_list=eval(pure_pull_file_info)
+    else:
+        pure_pull_list=[]
+    if pure_pull_list:
+        for i,a_change in enumerate(relevant_change_content):
+            file_name=a_change["file_name"]
+            if file_name in pure_pull_list:
+                relevant_change_content[i]["change_info"]=[]
+            else:
+                pass
+
     new_code=relevant_change_content
 else:
     new_code=get_change_content(relevant_cset_list)
-
-change_content=new_code
-# remove pure pull file from change_content
-file_list_name="/remote/aseqa_archive3/code_coverage/scrum_tmp/"+branch_name+"_file_list_"+time_tag
-get_list_cmd="ssh demingli@lnxsdcc2.sjc.sap.corp /usr/u/demingli/code_coverage/get_pure_pull_list.sh "+view_name+" "+cspec+" "+start_time+" "+f_end_time+" "+branch_name+" "+file_list_name+" 2>/dev/null"
-return_file_info=os.popen(get_list_cmd).read()
-if return_file_info:
-    return_dict=eval(return_file_info)
-    pure_pull_list=return_dict["pure_pull_list"]
-    file_blocks_list=return_dict["file_blocks_list"]
-else:
-    pure_pull_list=[]
-    file_blocks_list=[]
-
-if pure_pull_list:
-    for i,a_change in enumerate(change_content):
-        file_name=a_change["file_name"]
-        if file_name in pure_pull_list:
-            # remove element which is in pure pull list
-            change_content[i]["change_info"]=[]
-        else:
-            pass
-
-for i,a_change in enumerate(change_content):
-    # add cset info
-    file_name=a_change["file_name"]
-    if change_content[i]["change_info"]:
-        change_content[i]["cset_info"]=get_csetinfo(file_name)
-    else:
-        change_content[i]["cset_info"]=[]
-    # add file blocks info
-    for a_file_block_info in file_blocks_list:
-        if file_name==a_file_block_info["file_name"]:
-            change_content[i]["blocks_info"]=a_file_block_info["blocks_info"]
-    if change_content[i].has_key("blocks_info"):
-        pass
-    else:
-        change_content[i]["blocks_info"]=[]
-
-new_code=change_content
+    # print get_change_content(relevant_cset_list)
 new_code_file="/remote/aseqa_archive3/code_coverage/scrum_tmp/"+branch_name+"_new_code_"+time_tag
 wfile=open(new_code_file, 'w')
 wfile.write(str(new_code))

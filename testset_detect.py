@@ -79,7 +79,8 @@ def parse_diff(ct_diff_output):
     return rslt
 
 view_tag=branch_name+"\_%"
-get_relevant_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,view_tag)
+# get_relevant_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,view_tag)
+get_relevant_cset_sql="select cset_name from qts_db..e2_cset where date_closed > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,view_tag)
 relevant_cset=exec_cmd(get_relevant_cset_sql)
 if relevant_cset:
     relevant_cset_list=map(lambda x:x[0], relevant_cset)
@@ -88,7 +89,8 @@ else:
     relevant_cset_list=[]
 
 pull_view_tag=branch_name+"\_merge%"
-get_pull_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,pull_view_tag)
+# get_pull_cset_sql="select cset_name from qts_db..e2_cset where date_created > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,pull_view_tag)
+get_pull_cset_sql="select cset_name from qts_db..e2_cset where date_closed > \"%s\" and date_closed <= \"%s\" and view_tag like \"%s\" escape '\\'"%(start_time,end_time,pull_view_tag)
 # print get_pull_cset_sql
 pull_cset=exec_cmd(get_pull_cset_sql)
 if pull_cset:
@@ -128,7 +130,12 @@ testset_list=[]
 for a_file in all_affect_file_list:
     if re.search("(?:/qtst/testsets/)(\S+)",a_file):
         cur_set=re.search("(?:/qtst/testsets/)(\S+)",a_file).group(1)
-        testset_list.append(cur_set.split("/")[-1])
+        #if cur_set.split("/")[-1]=="st_mvcc":
+        #    print a_file
+        if cur_set.split("/")[-1] in ["CEP","DEV","FTD","PW","SAP","STRESS","TEA","ase-ocs","cert_testsets","certifications","sample_cf"]:
+            pass
+        else:
+            testset_list.append(cur_set.split("/")[-1])
 view_name=branch_name+"_demingli_vu"
 cspec=branch_name+".csp"
 print testset_list
